@@ -13,11 +13,21 @@ import (
 // func Unmarshal(t interface{}) []byte {
 // }
 
-func Read(file *bytes.Reader) NBTTag {
-	return readCompound(file)
+func ReadFile(filename string) NBTTag {
+	file, err := DecodeFile("bigtest.nbt")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	r := bytes.NewReader(file)
+	return Read(r)
 }
 
-func readCompound(file *bytes.Reader) NBTTag {
+func Read(file *bytes.Reader) NBTTag {
+	return readImplicitCompound(file)
+}
+
+func readImplicitCompound(file *bytes.Reader) NBTTag {
 	tagType, err := file.ReadByte()
 	if err != nil {
 		log.Fatalf("Couldn't read tagType, %s\n", err)
@@ -36,8 +46,8 @@ func readCompound(file *bytes.Reader) NBTTag {
 			Compound: getNbtCompoundBody(file),
 		},
 	}
-
 }
+
 func getNbtCompoundBody(file *bytes.Reader) map[string]NBTTag {
 	nbtTagCompound := make(map[string]NBTTag)
 	nextTag, err := file.ReadByte()
@@ -185,7 +195,14 @@ func readList(file *bytes.Reader) NBTTag {
 	panic("UNIMPLEMENTED")
 }
 
-// readCompound()
+func readCompound(file *bytes.Reader) NBTTag {
+	return NBTTag{
+		NBTType: TAG_COMPOUND,
+		NBTPayload: NBTPayloadUnion{
+			Compound: getNbtCompoundBody(file),
+		},
+	}
+}
 
 func readIntArray(file *bytes.Reader) NBTTag {
 	length := int(readIntHelper(file))
