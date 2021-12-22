@@ -1,11 +1,10 @@
 package main
 
 import (
-	"log"
+	"fmt"
 	"nbtlib/nbt"
 )
 
 func main() {
-	nbtCompound := nbt.ReadFile("bigtest.nbt")
-	log.Printf("%v\n", nbtCompound)
+	fmt.Printf("%s", nbt.ReadFile("bigtest.nbt"))
 }

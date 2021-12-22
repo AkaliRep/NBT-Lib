@@ -3,7 +3,10 @@ package nbt
 import (
 	"fmt"
 	"reflect"
+	"strings"
 )
+
+var deep = 0
 
 const (
 	TAG_END byte = iota
@@ -75,19 +78,73 @@ type NBTTag struct {
 	NBTPayload NBTPayloadUnion
 }
 
+func (tag NBTTag) String() string {
+	tabs := strings.Repeat("\t", deep)
+	strFormat := tabs + "NBTTag(Type: %s, Name: %s, NBTPayload: %s)\n"
+	intFormat := tabs + "NBTTag(Type: %s, Name: %s, NBTPayload: %d)\n"
+	floatFormat := tabs + "NBTTag(Type: %s, Name: %s, NBTPayload: %f)\n"
+	listFormat := tabs + "NBTTag(Type: %s, Name: %s, NBTPayload: %v)\n"
+	compoundFormat := tabs + "NBTTag(Type: %s, Name: %s, NBTPayload)\n%s"
+	payload := tag.NBTPayload
+	str := ""
+
+	switch tag.NBTType {
+	case TAG_BYTE:
+		str += fmt.Sprintf(intFormat, TagTypeToString(TAG_BYTE), tag.Name, payload.S8)
+	case TAG_SHORT:
+		str += fmt.Sprintf(intFormat, TagTypeToString(TAG_SHORT), tag.Name, payload.S16)
+	case TAG_INT:
+		str += fmt.Sprintf(intFormat, TagTypeToString(TAG_INT), tag.Name, payload.S32)
+	case TAG_LONG:
+		str += fmt.Sprintf(intFormat, TagTypeToString(TAG_LONG), tag.Name, payload.S64)
+	case TAG_FLOAT:
+		str += fmt.Sprintf(floatFormat, TagTypeToString(TAG_FLOAT), tag.Name, payload.F32)
+	case TAG_DOUBLE:
+		str += fmt.Sprintf(floatFormat, TagTypeToString(TAG_DOUBLE), tag.Name, payload.F64)
+	case TAG_STRING:
+		str += fmt.Sprintf(strFormat, TagTypeToString(TAG_STRING), tag.Name, payload.Str)
+	case TAG_LIST:
+		return fmt.Sprintf(listFormat, TagTypeToString(TAG_LIST), tag.Name, payload.List)
+	case TAG_COMPOUND:
+		result := ""
+		deep += 1
+		for k, v := range tag.NBTPayload.Compound {
+			v.Name = k
+			result += v.String()
+		}
+
+		deep -= 1
+		str += fmt.Sprintf(compoundFormat, TagTypeToString(TAG_COMPOUND), tag.Name, result)
+	case TAG_INT_ARRAY:
+		str += fmt.Sprintf(listFormat, TagTypeToString(TAG_INT_ARRAY), tag.Name, payload.IntArray)
+	default:
+		panic("UNREACHEABLE")
+	}
+
+	return str
+}
+
 type Chunk struct {
 	X    int
 	Y    int
 	Data NBTTag
 }
 
-func PrintlAllSubTypes(t reflect.Type, deep int) {
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
+func FillStruct(iface interface{}, deep int) {
+	v := reflect.ValueOf(iface)
+	t := reflect.TypeOf(iface)
 
-		if f.Type.Kind().String() == "struct" {
-			PrintlAllSubTypes(f.Type, deep+1)
+	for i := 0; i < t.NumField(); i++ {
+		fv := v.Field(i)
+		ft := t.Field(i)
+
+		fmt.Printf("(%s, %d) -> %s\n", ft.Name, deep, ft.Type.Name())
+		if a, ok := fv.Interface().(NBTTag); ok {
+			fmt.Printf("%v\n", a)
 		}
-		fmt.Printf("(%d, %s) -> %s\n", deep, f.Name, f.Type)
+
+		if fv.Kind() == reflect.Struct {
+			FillStruct(fv.Interface(), deep+1)
+		}
 	}
 }

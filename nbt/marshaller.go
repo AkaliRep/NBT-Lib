@@ -14,7 +14,7 @@ import (
 // }
 
 func ReadFile(filename string) NBTTag {
-	file, err := DecodeFile("bigtest.nbt")
+	file, err := DecodeFile(filename)
 	if err != nil {
 		log.Fatal(err)
 	}
