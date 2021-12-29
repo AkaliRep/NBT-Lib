@@ -1,6 +1,7 @@
 package nbt
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -101,6 +102,8 @@ func (tag NBTTag) String() string {
 		str += fmt.Sprintf(floatFormat, TagTypeToString(TAG_FLOAT), tag.Name, payload.F32)
 	case TAG_DOUBLE:
 		str += fmt.Sprintf(floatFormat, TagTypeToString(TAG_DOUBLE), tag.Name, payload.F64)
+	case TAG_BYTE_ARRAY:
+		str += fmt.Sprintf(listFormat, TagTypeToString(TAG_DOUBLE), tag.Name, payload.ByteArray)
 	case TAG_STRING:
 		str += fmt.Sprintf(strFormat, TagTypeToString(TAG_STRING), tag.Name, payload.Str)
 	case TAG_LIST:
@@ -117,6 +120,8 @@ func (tag NBTTag) String() string {
 		str += fmt.Sprintf(compoundFormat, TagTypeToString(TAG_COMPOUND), tag.Name, result)
 	case TAG_INT_ARRAY:
 		str += fmt.Sprintf(listFormat, TagTypeToString(TAG_INT_ARRAY), tag.Name, payload.IntArray)
+	case TAG_LONG_ARRAY:
+		str += fmt.Sprintf(listFormat, TagTypeToString(TAG_INT_ARRAY), tag.Name, payload.LongArray)
 	default:
 		panic("UNREACHEABLE")
 	}
@@ -124,27 +129,72 @@ func (tag NBTTag) String() string {
 	return str
 }
 
-type Chunk struct {
-	X    int
-	Y    int
-	Data NBTTag
-}
-
-func FillStruct(iface interface{}, deep int) {
+// TODO better error reporting
+func FillStruct(iface interface{}, compound NBTTag) error {
 	v := reflect.ValueOf(iface)
 	t := reflect.TypeOf(iface)
 
-	for i := 0; i < t.NumField(); i++ {
-		fv := v.Field(i)
-		ft := t.Field(i)
+	if v.Kind() != reflect.Ptr || v.IsNil() {
+		return errors.New("invalid datatype, expecting a pointer")
+	}
 
-		fmt.Printf("(%s, %d) -> %s\n", ft.Name, deep, ft.Type.Name())
-		if a, ok := fv.Interface().(NBTTag); ok {
-			fmt.Printf("%v\n", a)
+	if compound.NBTType != TAG_COMPOUND {
+		return fmt.Errorf("expected TAG_COMPOUND but got %s", TagTypeToString(compound.NBTType))
+	}
+
+	for i := 0; i < v.Elem().NumField(); i++ {
+		fv := v.Elem().Field(i)
+		ft := t.Elem().Field(i)
+
+		structTagName := ft.Tag.Get("nbt_name")
+		if structTagName == "" {
+			return fmt.Errorf("unnamed TAG_COMPOUND element")
 		}
 
-		if fv.Kind() == reflect.Struct {
-			FillStruct(fv.Interface(), deep+1)
+		tag, exists := compound.NBTPayload.Compound[structTagName]
+		if !exists {
+			return fmt.Errorf("no element exists with name \"%s\", available elements %s", structTagName, getAllNbtTagNamesFromCompound(compound.NBTPayload.Compound))
+		}
+
+		switch fv.Kind() {
+		case reflect.Struct:
+			err := FillStruct(fv.Addr().Interface(), tag)
+			if err != nil {
+				return err
+			}
+
+		case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Int:
+			var val int64
+			switch tag.NBTType {
+			case TAG_BYTE:
+				val = int64(tag.NBTPayload.S8)
+			case TAG_SHORT:
+				val = int64(tag.NBTPayload.S16)
+			case TAG_INT:
+				val = int64(tag.NBTPayload.S32)
+			case TAG_LONG:
+				val = int64(tag.NBTPayload.S64)
+			default:
+				return fmt.Errorf("expected signed int type, but nbt field had type %s", TagTypeToString(tag.NBTType))
+			}
+			fv.SetInt(val)
+		case reflect.String:
+			if tag.NBTType != TAG_STRING {
+				return fmt.Errorf("type missmatching between destination value and nbttag, destination value is an string, but nbttag have %s", TagTypeToString(tag.NBTType))
+			}
+			fv.SetString(tag.NBTPayload.Str)
 		}
 	}
+
+	return nil
+}
+
+func getAllNbtTagNamesFromCompound(compound map[string]NBTTag) string {
+	arr := make([]string, 0)
+
+	for name := range compound {
+		arr = append(arr, name)
+	}
+
+	return "[" + strings.Join(arr, ", ") + "]"
 }
