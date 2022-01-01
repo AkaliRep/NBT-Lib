@@ -7,13 +7,13 @@ import (
 	"os"
 )
 
-func DecodeFile(filename string) ([]byte, error) {
+func DecompressFile(filename string) ([]byte, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
 
-	return decompressFile(data)
+	return DecompressByteArray(data)
 }
 
 const (
@@ -21,15 +21,15 @@ const (
 	ZLIB = 0x78
 )
 
-func decompressFile(file []byte) ([]byte, error) {
-	compressType := file[0]
+func DecompressByteArray(byteArray []byte) ([]byte, error) {
+	compressType := byteArray[0]
 	switch compressType {
 	case GZIP:
-		return decompressGzip(file)
+		return decompressGzip(byteArray)
 	case ZLIB:
-		return decompressZlib(file)
+		return decompressZlib(byteArray)
 	default:
-		return file, nil
+		return byteArray, nil
 	}
 }
 func decompressZlib(file []byte) ([]byte, error) {

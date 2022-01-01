@@ -7,7 +7,7 @@ import (
 )
 
 func ReadFile(filename string) NBTTag {
-	file, err := DecodeFile(filename)
+	file, err := DecompressFile(filename)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -55,7 +55,11 @@ func GetNbtCompound(stream *NBTByteStream) NBTTag {
 		if err != nil {
 			log.Fatalf("Couln't read string, %s\n", err)
 		}
-		readNbtTag(nextTag, stream, &nbtTagCompound, name)
+
+		err = readNbtTag(nextTag, stream, &nbtTagCompound, name)
+		if err != nil {
+			log.Fatalf("Couldn't read NBT %s\n", err)
+		}
 
 		nextTag, err = stream.ReadByte()
 		if err != nil {
