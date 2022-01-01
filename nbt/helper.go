@@ -1,9 +1,7 @@
 package nbt
 
 import (
-	"errors"
 	"fmt"
-	"reflect"
 	"strings"
 )
 
@@ -67,10 +65,61 @@ type NBTPayloadUnion struct {
 	F64       float64
 	ByteArray []byte
 	Str       string
-	List      []NBTPayloadUnion
+	List      NBTList
 	Compound  map[string]NBTTag
 	IntArray  []int32
 	LongArray []int64
+}
+
+type ListUnion struct {
+	S8        []byte
+	S16       []int16
+	S32       []int32
+	S64       []int64
+	F32       []float32
+	F64       []float64
+	ByteArray [][]byte
+	Str       []string
+	List      []NBTList
+	Compound  []map[string]NBTTag
+	IntArray  [][]int32
+	LongArray [][]int64
+}
+
+type NBTList struct {
+	Type byte
+	Data ListUnion
+}
+
+func (list NBTList) String() string {
+	switch list.Type {
+	case TAG_BYTE:
+		return fmt.Sprintf("%v", list.Data.S8)
+	case TAG_SHORT:
+		return fmt.Sprintf("%v", list.Data.S16)
+	case TAG_INT:
+		return fmt.Sprintf("%v", list.Data.S32)
+	case TAG_LONG:
+		return fmt.Sprintf("%v", list.Data.S64)
+	case TAG_FLOAT:
+		return fmt.Sprintf("%v", list.Data.F32)
+	case TAG_DOUBLE:
+		return fmt.Sprintf("%v", list.Data.F32)
+	case TAG_BYTE_ARRAY:
+		return fmt.Sprintf("%v", list.Data.ByteArray)
+	case TAG_STRING:
+		return fmt.Sprintf("%v", list.Data.Str)
+	case TAG_LIST:
+		return list.String()
+	case TAG_COMPOUND:
+		return fmt.Sprintf("%s", list.Data.Compound)
+	case TAG_INT_ARRAY:
+		return fmt.Sprintf("%v", list.Data.IntArray)
+	case TAG_LONG_ARRAY:
+		return fmt.Sprintf("%v", list.Data.LongArray)
+	default:
+		return "UNKNOWN_ARRAY_TYPE"
+	}
 }
 
 type NBTTag struct {
@@ -79,13 +128,183 @@ type NBTTag struct {
 	NBTPayload NBTPayloadUnion
 }
 
+func NewNamedCompound(name string) NBTTag {
+	return NBTTag{
+		NBTType: TAG_COMPOUND,
+		Name:    name,
+		NBTPayload: NBTPayloadUnion{
+			Compound: make(map[string]NBTTag),
+		},
+	}
+}
+
+func NewCompound() NBTTag {
+	return NBTTag{
+		NBTType: TAG_COMPOUND,
+		NBTPayload: NBTPayloadUnion{
+			Compound: make(map[string]NBTTag),
+		},
+	}
+}
+
+func (tag NBTTag) GetByte(name string) byte {
+	return tag.NBTPayload.Compound[name].NBTPayload.S8
+}
+
+func (tag NBTTag) SetByte(name string, data byte) {
+	tag.NBTPayload.Compound[name] = NBTTag{
+		NBTType: TAG_BYTE,
+		NBTPayload: NBTPayloadUnion{
+			S8: data,
+		},
+	}
+}
+
+func (tag NBTTag) GetShort(name string) int16 {
+	return tag.NBTPayload.Compound[name].NBTPayload.S16
+}
+
+func (tag NBTTag) SetShort(name string, data int16) {
+	tag.NBTPayload.Compound[name] = NBTTag{
+		NBTType: TAG_SHORT,
+		NBTPayload: NBTPayloadUnion{
+			S16: data,
+		},
+	}
+}
+
+func (tag NBTTag) GetInt(name string) int32 {
+	return tag.NBTPayload.Compound[name].NBTPayload.S32
+}
+
+func (tag NBTTag) SetInt(name string, data int32) {
+	tag.NBTPayload.Compound[name] = NBTTag{
+		NBTType: TAG_INT,
+		NBTPayload: NBTPayloadUnion{
+			S32: data,
+		},
+	}
+}
+
+func (tag NBTTag) GetLong(name string) int64 {
+	return tag.NBTPayload.Compound[name].NBTPayload.S64
+}
+
+func (tag NBTTag) SetLong(name string, data int64) {
+	tag.NBTPayload.Compound[name] = NBTTag{
+		NBTType: TAG_LONG,
+		NBTPayload: NBTPayloadUnion{
+			S64: data,
+		},
+	}
+}
+
+func (tag NBTTag) GetFloat(name string) float32 {
+	return tag.NBTPayload.Compound[name].NBTPayload.F32
+}
+
+func (tag NBTTag) SetFloat(name string, data float32) {
+	tag.NBTPayload.Compound[name] = NBTTag{
+		NBTType: TAG_FLOAT,
+		NBTPayload: NBTPayloadUnion{
+			F32: data,
+		},
+	}
+}
+
+func (tag NBTTag) GetDouble(name string) float64 {
+	return tag.NBTPayload.Compound[name].NBTPayload.F64
+}
+
+func (tag NBTTag) SetDouble(name string, data float64) {
+	tag.NBTPayload.Compound[name] = NBTTag{
+		NBTType: TAG_DOUBLE,
+		NBTPayload: NBTPayloadUnion{
+			F64: data,
+		},
+	}
+}
+
+func (tag NBTTag) GetByteArray(name string) []byte {
+	return tag.NBTPayload.Compound[name].NBTPayload.ByteArray
+}
+
+func (tag NBTTag) SetByteArray(name string, data []byte) {
+	tag.NBTPayload.Compound[name] = NBTTag{
+		NBTType: TAG_BYTE_ARRAY,
+		NBTPayload: NBTPayloadUnion{
+			ByteArray: data,
+		},
+	}
+}
+
+func (tag NBTTag) GetString(name string) string {
+	return tag.NBTPayload.Compound[name].NBTPayload.Str
+}
+
+func (tag NBTTag) SetString(name string, data string) {
+	tag.NBTPayload.Compound[name] = NBTTag{
+		NBTType: TAG_STRING,
+		NBTPayload: NBTPayloadUnion{
+			Str: data,
+		},
+	}
+}
+
+func (tag NBTTag) GetList(name string) NBTList {
+	return tag.NBTPayload.Compound[name].NBTPayload.List
+}
+
+func (tag NBTTag) SetList(name string, data NBTList) {
+	tag.NBTPayload.Compound[name] = NBTTag{
+		NBTType: TAG_LIST,
+		NBTPayload: NBTPayloadUnion{
+			List: data,
+		},
+	}
+}
+
+func (tag NBTTag) GetCompound(name string) NBTTag {
+	return tag.NBTPayload.Compound[name]
+}
+
+func (tag NBTTag) SetCompound(name string, data NBTTag) {
+	tag.NBTPayload.Compound[name] = data
+}
+
+func (tag NBTTag) GetIntArray(name string) []int32 {
+	return tag.NBTPayload.Compound[name].NBTPayload.IntArray
+}
+
+func (tag NBTTag) SetIntArray(name string, data []int32) {
+	tag.NBTPayload.Compound[name] = NBTTag{
+		NBTType: TAG_INT_ARRAY,
+		NBTPayload: NBTPayloadUnion{
+			IntArray: data,
+		},
+	}
+}
+
+func (tag NBTTag) GetLongArray(name string) []int64 {
+	return tag.NBTPayload.Compound[name].NBTPayload.LongArray
+}
+
+func (tag NBTTag) SetLongArray(name string, data []int64) {
+	tag.NBTPayload.Compound[name] = NBTTag{
+		NBTType: TAG_LONG_ARRAY,
+		NBTPayload: NBTPayloadUnion{
+			LongArray: data,
+		},
+	}
+}
+
 func (tag NBTTag) String() string {
 	tabs := strings.Repeat("\t", deep)
-	strFormat := tabs + "NBTTag(Type: %s, Name: %s, NBTPayload: %s)\n"
-	intFormat := tabs + "NBTTag(Type: %s, Name: %s, NBTPayload: %d)\n"
-	floatFormat := tabs + "NBTTag(Type: %s, Name: %s, NBTPayload: %f)\n"
-	listFormat := tabs + "NBTTag(Type: %s, Name: %s, NBTPayload: %v)\n"
-	compoundFormat := tabs + "NBTTag(Type: %s, Name: %s, NBTPayload)\n%s"
+	strFormat := tabs + "NBTTag(Type: %s, Name: %s, Payload: %s)\n"
+	intFormat := tabs + "NBTTag(Type: %s, Name: %s, Payload: %d)\n"
+	floatFormat := tabs + "NBTTag(Type: %s, Name: %s, Payload: %f)\n"
+	listFormat := tabs + "NBTTag(Type: %s, Name: %s, Payload: %v)\n"
+	compoundFormat := tabs + "NBTTag(Type: %s, Name: %s)\n%s"
 	payload := tag.NBTPayload
 	str := ""
 
@@ -127,74 +346,4 @@ func (tag NBTTag) String() string {
 	}
 
 	return str
-}
-
-// TODO better error reporting
-func FillStruct(iface interface{}, compound NBTTag) error {
-	v := reflect.ValueOf(iface)
-	t := reflect.TypeOf(iface)
-
-	if v.Kind() != reflect.Ptr || v.IsNil() {
-		return errors.New("invalid datatype, expecting a pointer")
-	}
-
-	if compound.NBTType != TAG_COMPOUND {
-		return fmt.Errorf("expected TAG_COMPOUND but got %s", TagTypeToString(compound.NBTType))
-	}
-
-	for i := 0; i < v.Elem().NumField(); i++ {
-		fv := v.Elem().Field(i)
-		ft := t.Elem().Field(i)
-
-		structTagName := ft.Tag.Get("nbt_name")
-		if structTagName == "" {
-			return fmt.Errorf("unnamed TAG_COMPOUND element")
-		}
-
-		tag, exists := compound.NBTPayload.Compound[structTagName]
-		if !exists {
-			return fmt.Errorf("no element exists with name \"%s\", available elements %s", structTagName, getAllNbtTagNamesFromCompound(compound.NBTPayload.Compound))
-		}
-
-		switch fv.Kind() {
-		case reflect.Struct:
-			err := FillStruct(fv.Addr().Interface(), tag)
-			if err != nil {
-				return err
-			}
-
-		case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Int:
-			var val int64
-			switch tag.NBTType {
-			case TAG_BYTE:
-				val = int64(tag.NBTPayload.S8)
-			case TAG_SHORT:
-				val = int64(tag.NBTPayload.S16)
-			case TAG_INT:
-				val = int64(tag.NBTPayload.S32)
-			case TAG_LONG:
-				val = int64(tag.NBTPayload.S64)
-			default:
-				return fmt.Errorf("expected signed int type, but nbt field had type %s", TagTypeToString(tag.NBTType))
-			}
-			fv.SetInt(val)
-		case reflect.String:
-			if tag.NBTType != TAG_STRING {
-				return fmt.Errorf("type missmatching between destination value and nbttag, destination value is an string, but nbttag have %s", TagTypeToString(tag.NBTType))
-			}
-			fv.SetString(tag.NBTPayload.Str)
-		}
-	}
-
-	return nil
-}
-
-func getAllNbtTagNamesFromCompound(compound map[string]NBTTag) string {
-	arr := make([]string, 0)
-
-	for name := range compound {
-		arr = append(arr, name)
-	}
-
-	return "[" + strings.Join(arr, ", ") + "]"
 }

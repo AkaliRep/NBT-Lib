@@ -2,16 +2,9 @@ package nbt
 
 import (
 	"bytes"
-	"encoding/binary"
+	"errors"
 	"log"
-	"math"
 )
-
-// func Marshal(t interface{}) []byte {
-// }
-
-// func Unmarshal(t interface{}) []byte {
-// }
 
 func ReadFile(filename string) NBTTag {
 	file, err := DecodeFile(filename)
@@ -20,15 +13,19 @@ func ReadFile(filename string) NBTTag {
 	}
 
 	r := bytes.NewReader(file)
-	return Read(r)
+	nbtByteStream := NBTByteStream{
+		stream: r,
+	}
+
+	return Read(&nbtByteStream)
 }
 
-func Read(file *bytes.Reader) NBTTag {
-	return readImplicitCompound(file)
+func Read(stream *NBTByteStream) NBTTag {
+	return readImplicitCompound(stream)
 }
 
-func readImplicitCompound(file *bytes.Reader) NBTTag {
-	tagType, err := file.ReadByte()
+func readImplicitCompound(stream *NBTByteStream) NBTTag {
+	tagType, err := stream.ReadByte()
 	if err != nil {
 		log.Fatalf("Couldn't read tagType, %s\n", err)
 	}
@@ -37,29 +34,30 @@ func readImplicitCompound(file *bytes.Reader) NBTTag {
 		log.Fatalf("Expected TAG_COMPOUND but got %s\n", TagTypeToString(tagType))
 	}
 
-	a := readName(file)
-
-	return NBTTag{
-		NBTType: TAG_COMPOUND,
-		Name:    a,
-		NBTPayload: NBTPayloadUnion{
-			Compound: getNbtCompoundBody(file),
-		},
+	_, err = stream.ReadString()
+	if err != nil {
+		log.Fatalf("Error reading string %s\n", err)
 	}
+
+	base := GetNbtCompound(stream)
+	return base
 }
 
-func getNbtCompoundBody(file *bytes.Reader) map[string]NBTTag {
-	nbtTagCompound := make(map[string]NBTTag)
-	nextTag, err := file.ReadByte()
+func GetNbtCompound(stream *NBTByteStream) NBTTag {
+	nbtTagCompound := NewCompound()
+	nextTag, err := stream.ReadByte()
 	if err != nil {
 		log.Fatal("Error reading the name tag, ", err)
 	}
 
 	for nextTag != TAG_END {
-		name := readName(file)
-		nbtTagCompound[name] = readNbtTag(nextTag, file)
+		name, err := stream.ReadString()
+		if err != nil {
+			log.Fatalf("Couln't read string, %s\n", err)
+		}
+		readNbtTag(nextTag, stream, &nbtTagCompound, name)
 
-		nextTag, err = file.ReadByte()
+		nextTag, err = stream.ReadByte()
 		if err != nil {
 			log.Fatal("Couldn't read next tag, ", err)
 		}
@@ -68,227 +66,279 @@ func getNbtCompoundBody(file *bytes.Reader) map[string]NBTTag {
 	return nbtTagCompound
 }
 
-func readNbtTag(tag byte, file *bytes.Reader) NBTTag {
+func readNbtTag(tag byte, stream *NBTByteStream, nbtTagCompound *NBTTag, name string) error {
 	switch tag {
 	case TAG_BYTE:
-		return readByte(file)
+		data, err := stream.ReadByte()
+		if err != nil {
+			return err
+		}
+
+		nbtTagCompound.SetByte(name, data)
 	case TAG_SHORT:
-		return readShort(file)
+		data, err := stream.ReadShortBE()
+		if err != nil {
+			return err
+		}
+
+		nbtTagCompound.SetShort(name, data)
 	case TAG_INT:
-		return readInt(file)
+		data, err := stream.ReadIntBE()
+		if err != nil {
+			return err
+		}
+
+		nbtTagCompound.SetInt(name, data)
 	case TAG_LONG:
-		return readLong(file)
+		data, err := stream.ReadLongBE()
+		if err != nil {
+			return err
+		}
+
+		nbtTagCompound.SetLong(name, data)
 	case TAG_FLOAT:
-		return readFloat(file)
+		data, err := stream.ReadFloatBE()
+		if err != nil {
+			return err
+		}
+
+		nbtTagCompound.SetFloat(name, data)
 	case TAG_DOUBLE:
-		return readDouble(file)
+		data, err := stream.ReadDoubleBE()
+		if err != nil {
+			return err
+		}
+
+		nbtTagCompound.SetDouble(name, data)
 	case TAG_BYTE_ARRAY:
-		return readByteArray(file)
+		data, err := stream.ReadByteArray()
+		if err != nil {
+			return err
+		}
+
+		nbtTagCompound.SetByteArray(name, data)
 	case TAG_STRING:
-		return readString(file)
+		data, err := stream.ReadString()
+		if err != nil {
+			return err
+		}
+
+		nbtTagCompound.SetString(name, data)
 	case TAG_LIST:
-		return readList(file)
+		list, err := readList(stream)
+		if err != nil {
+			return err
+		}
+
+		nbtTagCompound.SetList(name, list)
 	case TAG_COMPOUND:
-		return readCompound(file)
+		data := GetNbtCompound(stream)
+
+		nbtTagCompound.SetCompound(name, data)
 	case TAG_INT_ARRAY:
-		return readIntArray(file)
+		data, err := stream.ReadIntArray()
+		if err != nil {
+			return err
+		}
+
+		nbtTagCompound.SetIntArray(name, data)
 	case TAG_LONG_ARRAY:
-		return readLongArray(file)
+		data, err := stream.ReadLongArray()
+		if err != nil {
+			return err
+		}
+
+		nbtTagCompound.SetLongArray(name, data)
 	default:
-		panic("UNREACHEABLE")
+		return errors.New("unknown tag type")
 	}
+
+	return nil
 }
 
-func readByte(file *bytes.Reader) NBTTag {
-	return NBTTag{
-		NBTType: TAG_BYTE,
-		NBTPayload: NBTPayloadUnion{
-			S8: readByteHelper(file),
-		},
-	}
-}
-
-func readShort(file *bytes.Reader) NBTTag {
-	return NBTTag{
-		NBTType: TAG_SHORT,
-		NBTPayload: NBTPayloadUnion{
-			S16: readShortHelper(file),
-		},
-	}
-}
-
-func readInt(file *bytes.Reader) NBTTag {
-	return NBTTag{
-		NBTType: TAG_INT,
-		NBTPayload: NBTPayloadUnion{
-			S32: readIntHelper(file),
-		},
-	}
-}
-
-func readLong(file *bytes.Reader) NBTTag {
-	return NBTTag{
-		NBTType: TAG_LONG,
-		NBTPayload: NBTPayloadUnion{
-			S64: readLongHelper(file),
-		},
-	}
-}
-
-func readFloat(file *bytes.Reader) NBTTag {
-	f := make([]byte, 4)
-	_, err := file.Read(f)
+func readList(stream *NBTByteStream) (NBTList, error) {
+	tag, err := stream.ReadByte()
 	if err != nil {
-		log.Fatal("Error reading float, ", err)
+		return NBTList{}, err
 	}
 
-	fr := math.Float32frombits(binary.BigEndian.Uint32(f))
-	return NBTTag{
-		NBTType: TAG_FLOAT,
-		NBTPayload: NBTPayloadUnion{
-			F32: fr,
-		},
-	}
-}
-
-func readDouble(file *bytes.Reader) NBTTag {
-	d := make([]byte, 8)
-	_, err := file.Read(d)
+	length, err := stream.ReadIntBE()
 	if err != nil {
-		log.Fatal("Error reading double, ", err)
+		return NBTList{}, err
 	}
 
-	dr := math.Float64frombits(binary.BigEndian.Uint64(d))
-	return NBTTag{
-		NBTType: TAG_DOUBLE,
-		NBTPayload: NBTPayloadUnion{
-			F64: dr,
-		},
-	}
+	return readListBody(tag, int(length), stream)
 }
 
-func readByteArray(file *bytes.Reader) NBTTag {
-	length := int(readIntHelper(file))
-	arr := make([]byte, length)
-	for i := 0; i < length; i++ {
-		arr = append(arr, readByteHelper(file))
+func readListBody(tag byte, length int, stream *NBTByteStream) (NBTList, error) {
+	var list NBTList
+
+	switch tag {
+	case TAG_BYTE:
+		payload := make([]byte, 0)
+		for i := 0; i < length; i++ {
+			data, err := stream.ReadByte()
+			if err != nil {
+				return list, err
+			}
+
+			payload = append(payload, data)
+		}
+
+		list.Type = TAG_BYTE
+		list.Data.S8 = payload
+
+	case TAG_SHORT:
+		payload := make([]int16, 0)
+		for i := 0; i < length; i++ {
+			data, err := stream.ReadShortBE()
+			if err != nil {
+				return list, err
+			}
+
+			payload = append(payload, data)
+		}
+
+		list.Type = TAG_SHORT
+		list.Data.S16 = payload
+
+	case TAG_INT:
+		payload := make([]int32, 0)
+		for i := 0; i < length; i++ {
+			data, err := stream.ReadIntBE()
+			if err != nil {
+				return list, err
+			}
+
+			payload = append(payload, data)
+		}
+
+		list.Type = TAG_INT
+		list.Data.S32 = payload
+
+	case TAG_LONG:
+		payload := make([]int64, 0)
+		for i := 0; i < length; i++ {
+			data, err := stream.ReadLongBE()
+			if err != nil {
+				return list, err
+			}
+
+			payload = append(payload, data)
+		}
+
+		list.Type = TAG_LONG
+		list.Data.S64 = payload
+
+	case TAG_FLOAT:
+		payload := make([]float32, 0)
+		for i := 0; i < length; i++ {
+			data, err := stream.ReadFloatBE()
+			if err != nil {
+				return list, err
+			}
+
+			payload = append(payload, data)
+		}
+
+		list.Type = TAG_FLOAT
+		list.Data.F32 = payload
+
+	case TAG_DOUBLE:
+		payload := make([]float64, 0)
+		for i := 0; i < length; i++ {
+			data, err := stream.ReadDoubleBE()
+			if err != nil {
+				return list, err
+			}
+
+			payload = append(payload, data)
+		}
+
+		list.Type = TAG_DOUBLE
+		list.Data.F64 = payload
+
+	case TAG_BYTE_ARRAY:
+		payload := make([][]byte, 0)
+		for i := 0; i < length; i++ {
+			data, err := stream.ReadByteArray()
+			if err != nil {
+				return list, err
+			}
+
+			payload = append(payload, data)
+		}
+
+		list.Type = TAG_BYTE_ARRAY
+		list.Data.ByteArray = payload
+
+	case TAG_STRING:
+		payload := make([]string, 0)
+		for i := 0; i < length; i++ {
+			data, err := stream.ReadString()
+			if err != nil {
+				return list, err
+			}
+
+			payload = append(payload, data)
+		}
+
+		list.Type = TAG_STRING
+		list.Data.Str = payload
+
+	case TAG_LIST:
+		payload := make([]NBTList, 0)
+		for i := 0; i < length; i++ {
+			data, err := readList(stream)
+			if err != nil {
+				return list, err
+			}
+
+			payload = append(payload, data)
+		}
+
+		list.Type = TAG_LIST
+		list.Data.List = payload
+
+	case TAG_COMPOUND:
+		payload := make([]map[string]NBTTag, 0)
+		for i := 0; i < length; i++ {
+			data := GetNbtCompound(stream)
+			payload = append(payload, data.NBTPayload.Compound)
+		}
+
+		list.Type = TAG_COMPOUND
+		list.Data.Compound = payload
+
+	case TAG_INT_ARRAY:
+		payload := make([][]int32, 0)
+		for i := 0; i < length; i++ {
+			data, err := stream.ReadIntArray()
+			if err != nil {
+				return list, err
+			}
+
+			payload = append(payload, data)
+		}
+
+		list.Type = TAG_INT_ARRAY
+		list.Data.IntArray = payload
+
+	case TAG_LONG_ARRAY:
+		payload := make([][]int64, 0)
+		for i := 0; i < length; i++ {
+			data, err := stream.ReadLongArray()
+			if err != nil {
+				return list, err
+			}
+
+			payload = append(payload, data)
+		}
+
+		list.Type = TAG_LONG_ARRAY
+		list.Data.LongArray = payload
+
 	}
 
-	return NBTTag{
-		NBTType: TAG_INT_ARRAY,
-		NBTPayload: NBTPayloadUnion{
-			ByteArray: arr,
-		},
-	}
-}
-
-func readString(file *bytes.Reader) NBTTag {
-	return NBTTag{
-		NBTType: TAG_STRING,
-		NBTPayload: NBTPayloadUnion{
-			Str: readName(file),
-		},
-	}
-}
-
-func readList(file *bytes.Reader) NBTTag {
-	panic("UNIMPLEMENTED")
-}
-
-func readCompound(file *bytes.Reader) NBTTag {
-	return NBTTag{
-		NBTType: TAG_COMPOUND,
-		NBTPayload: NBTPayloadUnion{
-			Compound: getNbtCompoundBody(file),
-		},
-	}
-}
-
-func readIntArray(file *bytes.Reader) NBTTag {
-	length := int(readIntHelper(file))
-	arr := make([]int32, length)
-	for i := 0; i < length; i++ {
-		arr = append(arr, readIntHelper(file))
-	}
-
-	return NBTTag{
-		NBTType: TAG_INT_ARRAY,
-		NBTPayload: NBTPayloadUnion{
-			IntArray: arr,
-		},
-	}
-}
-
-func readLongArray(file *bytes.Reader) NBTTag {
-	length := int(readIntHelper(file))
-	arr := make([]int64, length)
-	for i := 0; i < length; i++ {
-		arr = append(arr, readLongHelper(file))
-	}
-
-	return NBTTag{
-		NBTType: TAG_INT_ARRAY,
-		NBTPayload: NBTPayloadUnion{
-			LongArray: arr,
-		},
-	}
-}
-
-func readName(file *bytes.Reader) string {
-	nameLength := make([]byte, 2)
-	_, err := file.Read(nameLength)
-	if err != nil {
-		log.Fatal("Couldn't read file", err)
-	}
-
-	nameLengthAsUint := binary.BigEndian.Uint16(nameLength)
-	name := make([]byte, nameLengthAsUint)
-	_, err = file.Read(name)
-	if err != nil {
-		log.Fatal("Couldn't read name, ", err)
-	}
-
-	return string(name)
-}
-
-func readByteHelper(file *bytes.Reader) byte {
-	b, err := file.ReadByte()
-	if err != nil {
-		log.Fatal("Error reading byte, ", err)
-	}
-
-	return b
-}
-
-func readShortHelper(file *bytes.Reader) int16 {
-	s := make([]byte, 2)
-	_, err := file.Read(s)
-	if err != nil {
-		log.Fatal("Error reading short, ", err)
-	}
-
-	sr := int16(s[0])<<8 | int16(s[1])
-	return sr
-}
-
-func readIntHelper(file *bytes.Reader) int32 {
-	i := make([]byte, 4)
-	_, err := file.Read(i)
-	if err != nil {
-		log.Fatal("Error reading int, ", err)
-	}
-
-	ir := int32(i[0])<<24 | int32(i[1])<<16 | int32(i[2])<<8 | int32(i[3])
-	return ir
-}
-
-func readLongHelper(file *bytes.Reader) int64 {
-	l := make([]byte, 8)
-	_, err := file.Read(l)
-	if err != nil {
-		log.Fatal("Error reading long, ", err)
-	}
-
-	lr := int64(l[0])<<56 | int64(l[1])<<48 | int64(l[2])<<40 | int64(l[3])<<32 | int64(l[4])<<24 | int64(l[5])<<16 | int64(l[6])<<8 | int64(l[7])
-	return lr
+	return list, nil
 }
