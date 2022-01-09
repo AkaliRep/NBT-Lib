@@ -20,6 +20,15 @@ func ReadFile(filename string) NBTTag {
 	return Read(&nbtByteStream)
 }
 
+func ReadByteArray(data []byte) NBTTag {
+	r := bytes.NewReader(data)
+	nbtByteStream := NBTByteStream{
+		stream: r,
+	}
+
+	return Read(&nbtByteStream)
+}
+
 func Read(stream *NBTByteStream) NBTTag {
 	return readImplicitCompound(stream)
 }
@@ -34,12 +43,13 @@ func readImplicitCompound(stream *NBTByteStream) NBTTag {
 		log.Fatalf("Expected TAG_COMPOUND but got %s\n", TagTypeToString(tagType))
 	}
 
-	_, err = stream.ReadString()
+	str, err := stream.ReadString()
 	if err != nil {
 		log.Fatalf("Error reading string %s\n", err)
 	}
 
 	base := GetNbtCompound(stream)
+	base.Name = str
 	return base
 }
 
