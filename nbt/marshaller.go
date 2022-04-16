@@ -3,7 +3,10 @@ package nbt
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"log"
+	"nbtlib/nbt/types"
+	"os"
 )
 
 func ReadFile(filename string) NBTTag {
@@ -20,7 +23,7 @@ func ReadFile(filename string) NBTTag {
 	return Read(&nbtByteStream)
 }
 
-func ReadByteArray(data []byte) NBTTag {
+func ReadByteArray(data []byte) types.NBTCompound {
 	r := bytes.NewReader(data)
 	nbtByteStream := NBTByteStream{
 		stream: r,
@@ -29,11 +32,18 @@ func ReadByteArray(data []byte) NBTTag {
 	return Read(&nbtByteStream)
 }
 
-func Read(stream *NBTByteStream) NBTTag {
+func Read(stream *NBTByteStream) types.NBTCompound {
+	func() {
+		if err := recover(); err != nil {
+			fmt.Printf("An error ocurred while reading the NBT stream\n[ERROR]: %s\n", err)
+			os.Exit(1)
+		}
+	}()
+
 	return readImplicitCompound(stream)
 }
 
-func readImplicitCompound(stream *NBTByteStream) NBTTag {
+func readImplicitCompound(stream *NBTByteStream) types.NBTCompound {
 	tagType, err := stream.ReadByte()
 	if err != nil {
 		log.Fatalf("Couldn't read tagType, %s\n", err)
